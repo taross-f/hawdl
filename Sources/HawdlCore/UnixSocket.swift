@@ -71,7 +71,11 @@ public enum UnixSocket {
     }
 
     /// Creates a listening socket at `path`, replacing any stale socket file.
-    public static func listen(at path: String, backlog: Int32 = 16, mode: mode_t) throws -> Int32 {
+    ///
+    /// - Parameter backlog: SOMAXCONN. A short backlog makes a burst of clients
+    ///   fail with ECONNREFUSED, which is indistinguishable from "the daemon is
+    ///   not running" at the other end of the socket.
+    public static func listen(at path: String, backlog: Int32 = 128, mode: mode_t) throws -> Int32 {
         var addr = try address(for: path)
         _ = unlink(path)
 

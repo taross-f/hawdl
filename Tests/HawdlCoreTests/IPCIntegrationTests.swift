@@ -10,11 +10,15 @@ final class IPCIntegrationTests: XCTestCase {
     private var server: IPCServer!
     private let queue = DispatchQueue(label: "hawdl.tests.ipc")
 
-    /// The library sets SO_NOSIGPIPE on every socket it owns, but xctest is a
-    /// host process that has not disarmed SIGPIPE, and a stray one kills the
-    /// whole run with no failure message. hawdld does the same thing in run().
+    /// The library sets SO_NOSIGPIPE on every socket it owns, so a peer that
+    /// vanishes mid-write should surface as EPIPE. xctest has not disarmed
+    /// SIGPIPE though, so if that suppression ever regresses the whole run dies
+    /// with signal 13 and no failure message at all.
+    ///
+    /// Counting the signal instead of ignoring it keeps the run alive AND keeps
+    /// the regression visible: `testNoSIGPIPEEscapedTheLibrary` fails on it.
     override class func setUp() {
-        _ = signal(SIGPIPE, SIG_IGN)
+        _ = signal(SIGPIPE, hawdlCountSIGPIPE)
     }
 
     override func setUpWithError() throws {
@@ -205,6 +209,15 @@ final class IPCIntegrationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: socketPath))
     }
 
+    /// Runs last (alphabetically after the others) so it sees the whole
+    /// suite's worth of socket traffic.
+    func testZZNoSIGPIPEEscapedTheLibrary() {
+        XCTAssertEqual(
+            hawdlSIGPIPECount, 0,
+            "SO_NOSIGPIPE is not covering every socket the library writes to"
+        )
+    }
+
     func testAClientThatGoesAwayDoesNotBreakTheServer() throws {
         try startServer { _ in self.makeStatus() }
 
@@ -221,6 +234,14 @@ final class IPCIntegrationTests: XCTestCase {
         let survivor = try IPCClient.request(.status, socketPath: socketPath, timeout: 5)
         XCTAssertEqual(survivor.desired, .hold)
     }
+}
+
+/// Bumped by the SIGPIPE handler installed for this suite. `sig_atomic_t` and a
+/// bare increment are all that is safe to do inside a signal handler.
+var hawdlSIGPIPECount: sig_atomic_t = 0
+
+func hawdlCountSIGPIPE(_ number: Int32) {
+    hawdlSIGPIPECount += 1
 }
 
 /// Minimal lock box so a test can read state the server queue writes.

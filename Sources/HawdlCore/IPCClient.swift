@@ -8,7 +8,7 @@ import Foundation
 /// having to close the descriptor out from under a blocked syscall.
 public final class IPCClient {
     public enum ClientError: Error, Equatable, CustomStringConvertible {
-        case daemonNotRunning(String)
+        case daemonNotRunning(path: String, reason: String)
         case notConnected
         case connectionClosed
         case timedOut
@@ -17,8 +17,8 @@ public final class IPCClient {
 
         public var description: String {
             switch self {
-            case .daemonNotRunning(let path):
-                return "hawdld is not running (no socket at \(path))"
+            case .daemonNotRunning(let path, let reason):
+                return "cannot reach hawdld at \(path): \(reason)"
             case .notConnected:
                 return "not connected"
             case .connectionClosed:
@@ -55,9 +55,23 @@ public final class IPCClient {
         do {
             fd = try UnixSocket.connect(to: socketPath)
         } catch let error as UnixSocket.SocketError {
-            if case .systemCall(_, let code) = error,
-               code == ENOENT || code == ECONNREFUSED {
-                throw ClientError.daemonNotRunning(socketPath)
+            if case .systemCall(_, let code) = error {
+                switch code {
+                case ENOENT:
+                    throw ClientError.daemonNotRunning(
+                        path: socketPath,
+                        reason: "no socket file, so hawdld is not running"
+                    )
+                case ECONNREFUSED:
+                    // Either a stale socket file left by a dead daemon, or a
+                    // listen backlog that is momentarily full.
+                    throw ClientError.daemonNotRunning(
+                        path: socketPath,
+                        reason: "nothing is listening"
+                    )
+                default:
+                    break
+                }
             }
             throw ClientError.io(error.description)
         }
