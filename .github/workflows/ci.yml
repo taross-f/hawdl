@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `claude/**` is here because this repository has no main branch yet, so
+    # the working branch is the only thing CI can run against.
+    branches: [main, "claude/**"]
   pull_request:
   workflow_dispatch:
 
