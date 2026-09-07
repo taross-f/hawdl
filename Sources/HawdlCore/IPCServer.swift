@@ -6,6 +6,14 @@ import Foundation
 /// Everything runs on a single serial queue, so connection state needs no
 /// locking. Writes are non-blocking with a bounded outbound buffer: a client
 /// that stops reading gets dropped instead of wedging the daemon.
+///
+/// **The host process must ignore SIGPIPE.** `hawdld` does this in `run()`.
+/// Sockets get SO_NOSIGPIPE where possible, but that call itself fails when the
+/// peer has already hung up before `accept` returns — which is precisely the
+/// connection whose reply then raises SIGPIPE. Darwin has no per-write
+/// MSG_NOSIGNAL, so process-level disposition is the only complete answer, and
+/// a daemon that any client can kill by hanging up at the wrong moment is not
+/// a daemon.
 public final class IPCServer {
     /// Called for every request. Return the status to send back.
     public typealias Handler = (Command) -> StatusMessage
@@ -103,21 +111,13 @@ public final class IPCServer {
 
     private func acceptPending() {
         while true {
-            let fd = accept(listenFD, nil, nil)
-            if fd < 0 {
-                if errno == EINTR { continue }
-                if errno == EAGAIN || errno == EWOULDBLOCK { return }
-                log("accept failed: \(String(cString: strerror(errno)))")
+            do {
+                guard let fd = try UnixSocket.accept(listenFD) else { return }
+                register(fd: fd)
+            } catch {
+                log("accept failed: \(error)")
                 return
             }
-            do {
-                try UnixSocket.setNonBlocking(fd)
-            } catch {
-                _ = Darwin.close(fd)
-                continue
-            }
-            UnixSocket.suppressSIGPIPE(fd)
-            register(fd: fd)
         }
     }
 

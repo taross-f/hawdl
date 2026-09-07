@@ -111,13 +111,44 @@ public enum UnixSocket {
         return fd
     }
 
+    /// Accepts one pending connection, applying the same options as
+    /// `connect(to:)`. Returns nil when nothing is pending.
+    ///
+    /// This exists so that the accept path and the connect path cannot drift
+    /// apart: a socket that reaches the rest of the library is always
+    /// non-blocking and always SIGPIPE-safe.
+    public static func accept(_ listenFD: Int32) throws -> Int32? {
+        while true {
+            let fd = Darwin.accept(listenFD, nil, nil)
+            if fd < 0 {
+                if errno == EINTR { continue }
+                if errno == EAGAIN || errno == EWOULDBLOCK { return nil }
+                throw SocketError.systemCall(name: "accept", code: errno)
+            }
+            // Best effort: this fails when the peer has already hung up, which
+            // is exactly the case that goes on to raise SIGPIPE on the reply.
+            // The connection is still worth accepting (there may be a complete
+            // request buffered in it), so the host process has to be the one
+            // that disarms SIGPIPE. See the note on IPCServer.
+            suppressSIGPIPE(fd)
+            do {
+                try setNonBlocking(fd)
+            } catch {
+                _ = close(fd)
+                throw error
+            }
+            return fd
+        }
+    }
+
     /// Darwin raises SIGPIPE on a write to a socket whose peer has gone away.
     /// Setting SO_NOSIGPIPE turns that into a plain EPIPE, so neither the
     /// daemon nor a client library user has to install a signal handler to
     /// survive a peer disappearing mid-write.
-    public static func suppressSIGPIPE(_ fd: Int32) {
+    @discardableResult
+    public static func suppressSIGPIPE(_ fd: Int32) -> Bool {
         var on: Int32 = 1
-        _ = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+        return setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size)) == 0
     }
 
     public static func setNonBlocking(_ fd: Int32) throws {

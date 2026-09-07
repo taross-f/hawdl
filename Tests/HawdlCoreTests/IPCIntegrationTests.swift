@@ -10,15 +10,13 @@ final class IPCIntegrationTests: XCTestCase {
     private var server: IPCServer!
     private let queue = DispatchQueue(label: "hawdl.tests.ipc")
 
-    /// The library sets SO_NOSIGPIPE on every socket it owns, so a peer that
-    /// vanishes mid-write should surface as EPIPE. xctest has not disarmed
-    /// SIGPIPE though, so if that suppression ever regresses the whole run dies
-    /// with signal 13 and no failure message at all.
-    ///
-    /// Counting the signal instead of ignoring it keeps the run alive AND keeps
-    /// the regression visible: `testNoSIGPIPEEscapedTheLibrary` fails on it.
+    /// Any host running an IPCServer has to disarm SIGPIPE, because a peer that
+    /// hangs up before `accept` returns cannot be given SO_NOSIGPIPE at all and
+    /// its reply will raise the signal. hawdld does this in `run()`; xctest does
+    /// not, so the suite has to do it for itself or the whole run dies with
+    /// signal 13 and no failure message.
     override class func setUp() {
-        _ = signal(SIGPIPE, hawdlCountSIGPIPE)
+        _ = signal(SIGPIPE, SIG_IGN)
     }
 
     override func setUpWithError() throws {
@@ -178,6 +176,21 @@ final class IPCIntegrationTests: XCTestCase {
         }
     }
 
+    /// The accept path is the one that matters: the server is what writes to a
+    /// peer that may already have hung up.
+    func testAcceptedSocketsHaveSIGPIPESuppressed() throws {
+        let listener = try UnixSocket.listen(at: socketPath, mode: 0o666)
+        defer { _ = close(listener); _ = unlink(socketPath) }
+
+        let client = try UnixSocket.connect(to: socketPath)
+        defer { _ = close(client) }
+
+        let accepted = try XCTUnwrap(UnixSocket.accept(listener))
+        defer { _ = close(accepted) }
+
+        XCTAssertTrue(readsBackAsSIGPIPESafe(accepted))
+    }
+
     /// If this regresses, a peer disappearing mid-write kills the host process
     /// instead of returning EPIPE.
     func testConnectedSocketsHaveSIGPIPESuppressed() throws {
@@ -186,11 +199,17 @@ final class IPCIntegrationTests: XCTestCase {
         let fd = try UnixSocket.connect(to: socketPath)
         defer { _ = close(fd) }
 
+        XCTAssertTrue(readsBackAsSIGPIPESafe(fd))
+    }
+
+    private func readsBackAsSIGPIPESafe(_ fd: Int32) -> Bool {
         var value: Int32 = 0
         var length = socklen_t(MemoryLayout<Int32>.size)
-        let rc = getsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &value, &length)
-        XCTAssertEqual(rc, 0, "getsockopt(SO_NOSIGPIPE) failed: \(String(cString: strerror(errno)))")
-        XCTAssertNotEqual(value, 0, "SO_NOSIGPIPE is not set on a connected socket")
+        guard getsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &value, &length) == 0 else {
+            XCTFail("getsockopt(SO_NOSIGPIPE): \(String(cString: strerror(errno)))")
+            return false
+        }
+        return value != 0
     }
 
     func testTheSocketIsWorldWritable() throws {
@@ -209,15 +228,6 @@ final class IPCIntegrationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: socketPath))
     }
 
-    /// Runs last (alphabetically after the others) so it sees the whole
-    /// suite's worth of socket traffic.
-    func testZZNoSIGPIPEEscapedTheLibrary() {
-        XCTAssertEqual(
-            hawdlSIGPIPECount, 0,
-            "SO_NOSIGPIPE is not covering every socket the library writes to"
-        )
-    }
-
     func testAClientThatGoesAwayDoesNotBreakTheServer() throws {
         try startServer { _ in self.makeStatus() }
 
@@ -234,14 +244,6 @@ final class IPCIntegrationTests: XCTestCase {
         let survivor = try IPCClient.request(.status, socketPath: socketPath, timeout: 5)
         XCTAssertEqual(survivor.desired, .hold)
     }
-}
-
-/// Bumped by the SIGPIPE handler installed for this suite. `sig_atomic_t` and a
-/// bare increment are all that is safe to do inside a signal handler.
-var hawdlSIGPIPECount: sig_atomic_t = 0
-
-func hawdlCountSIGPIPE(_ number: Int32) {
-    hawdlSIGPIPECount += 1
 }
 
 /// Minimal lock box so a test can read state the server queue writes.

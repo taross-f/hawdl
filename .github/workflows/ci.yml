@@ -54,8 +54,10 @@ jobs:
           DAEMON=$!
           trap 'kill $DAEMON 2>/dev/null || true' EXIT
 
+          # `[ ... ] && break` would abort the whole script under `set -e` on
+          # the first miss, before the daemon has had time to bind.
           for _ in $(seq 1 50); do
-            [ -S "$SOCK" ] && break
+            if [ -S "$SOCK" ]; then break; fi
             sleep 0.1
           done
           test -S "$SOCK"
