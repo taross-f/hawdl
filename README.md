@@ -209,7 +209,7 @@ AWDL: held down  blocked=13  last=2025-09-07T10:24:02Z  daemon=0.1.0
 | `actual` | `up` / `down` / `unavailable` / `unknown` — 実際の `awdl0` の状態 |
 | `available` | `awdl0` がこのマシンに存在するか (`actual != "unavailable"`) |
 | `flapCount` | hold 中に OS が up に戻した回数 |
-| `lastFlapAt` | 直近のフラップ時刻 (ISO 8601 / UTC)。一度も無ければ `null` |
+| `lastFlapAt` | 直近のフラップ時刻 (ISO 8601 / UTC)。一度も無ければキー自体が省略される |
 | `daemonVersion` | `hawdld` のバージョン |
 
 `subscribe` の場合は接続を維持し、状態が変わるたびにプッシュする。

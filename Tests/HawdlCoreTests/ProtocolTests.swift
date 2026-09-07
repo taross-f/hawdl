@@ -79,6 +79,17 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(text.filter { $0 == "\n" }.count, 1, "one message must be exactly one line")
     }
 
+    /// Swift's synthesized encoder omits nil optionals rather than writing
+    /// null, and the README documents the wire format, so pin it.
+    func testMissingFlapTimestampIsOmittedNotNull() throws {
+        let text = String(
+            decoding: try HawdlCodec.encodeLine(StatusMessage(desired: .release, actual: .up)),
+            as: UTF8.self
+        )
+        XCTAssertFalse(text.contains("lastFlapAt"), text)
+        XCTAssertFalse(text.contains("null"), text)
+    }
+
     func testRequestWireFormat() throws {
         let text = String(decoding: try HawdlCodec.encodeLine(Request(cmd: .subscribe)), as: UTF8.self)
         XCTAssertEqual(text, "{\"cmd\":\"subscribe\"}\n")

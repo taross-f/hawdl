@@ -142,9 +142,12 @@ public enum UnixSocket {
     }
 
     /// Darwin raises SIGPIPE on a write to a socket whose peer has gone away.
-    /// Setting SO_NOSIGPIPE turns that into a plain EPIPE, so neither the
-    /// daemon nor a client library user has to install a signal handler to
-    /// survive a peer disappearing mid-write.
+    /// SO_NOSIGPIPE turns that into a plain EPIPE.
+    ///
+    /// - Returns: false when the option could not be set, which happens when the
+    ///   peer is *already* gone. That case cannot be covered here at all, and
+    ///   Darwin has no per-write MSG_NOSIGNAL, so a process that accepts
+    ///   connections must also ignore SIGPIPE. See the note on `IPCServer`.
     @discardableResult
     public static func suppressSIGPIPE(_ fd: Int32) -> Bool {
         var on: Int32 = 1
