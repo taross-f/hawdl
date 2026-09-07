@@ -97,7 +97,9 @@ final class RouteMonitor {
 
     private func matches(index: UInt32) -> Bool {
         if index == 0 { return true }
-        if cachedIndex == 0 || cachedIndex != index {
+        if cachedIndex != index {
+            // The index can change if the interface is torn down and recreated,
+            // so re-resolve rather than trusting a stale cache.
             cachedIndex = interfaceName.withCString { if_nametoindex($0) }
         }
         // If the interface is gone we cannot resolve an index; reconcile anyway

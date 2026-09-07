@@ -45,7 +45,8 @@ public final class SystemInterfaceController: InterfaceController {
     }
 
     public func isUp() throws -> Bool {
-        (try readFlags() & upMask) != 0
+        let flags = try readFlags()
+        return (flags & upMask) != 0
     }
 
     public func setUp(_ up: Bool) throws {

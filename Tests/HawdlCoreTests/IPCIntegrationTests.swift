@@ -10,6 +10,13 @@ final class IPCIntegrationTests: XCTestCase {
     private var server: IPCServer!
     private let queue = DispatchQueue(label: "hawdl.tests.ipc")
 
+    /// The library sets SO_NOSIGPIPE on every socket it owns, but xctest is a
+    /// host process that has not disarmed SIGPIPE, and a stray one kills the
+    /// whole run with no failure message. hawdld does the same thing in run().
+    override class func setUp() {
+        _ = signal(SIGPIPE, SIG_IGN)
+    }
+
     override func setUpWithError() throws {
         // Unix socket paths are capped at ~104 bytes, so keep this short.
         socketPath = "/tmp/hawdl-test-\(UUID().uuidString.prefix(8)).sock"
@@ -165,6 +172,21 @@ final class IPCIntegrationTests: XCTestCase {
                 return XCTFail("expected daemonNotRunning, got \(error)")
             }
         }
+    }
+
+    /// If this regresses, a peer disappearing mid-write kills the host process
+    /// instead of returning EPIPE.
+    func testConnectedSocketsHaveSIGPIPESuppressed() throws {
+        try startServer { _ in self.makeStatus() }
+
+        let fd = try UnixSocket.connect(to: socketPath)
+        defer { _ = close(fd) }
+
+        var value: Int32 = 0
+        var length = socklen_t(MemoryLayout<Int32>.size)
+        let rc = getsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &value, &length)
+        XCTAssertEqual(rc, 0, "getsockopt(SO_NOSIGPIPE) failed: \(String(cString: strerror(errno)))")
+        XCTAssertNotEqual(value, 0, "SO_NOSIGPIPE is not set on a connected socket")
     }
 
     func testTheSocketIsWorldWritable() throws {
