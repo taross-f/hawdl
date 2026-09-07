@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: build and test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Build (debug)
+        run: swift build -v
+
+      # Everything under test is pure logic or a Unix socket, so this needs
+      # neither root nor a real awdl0 interface.
+      - name: Test
+        run: swift test -v
+
+      # This is what the Homebrew formula runs; keep it working.
+      - name: Build (release)
+        run: swift build -c release --disable-sandbox
+
+      - name: Smoke test the binaries
+        run: |
+          .build/release/hawdl --version
+          .build/release/hawdld --version
+          .build/release/hawdl --help > /dev/null
+
+      # Exercise the daemon end to end without root: a simulated interface and
+      # a socket in the runner's temp directory.
+      - name: Daemon smoke test (dry run)
+        run: |
+          set -euo pipefail
+          SOCK=/tmp/hawdl-ci.sock
+          STATE=/tmp/hawdl-ci-state.json
+          .build/release/hawdld --dry-run --socket "$SOCK" --state "$STATE" --verbose &
+          DAEMON=$!
+          trap 'kill $DAEMON 2>/dev/null || true' EXIT
+
+          for _ in $(seq 1 50); do
+            [ -S "$SOCK" ] && break
+            sleep 0.1
+          done
+          test -S "$SOCK"
+
+          .build/release/hawdl status  --socket "$SOCK" --json
+          .build/release/hawdl hold    --socket "$SOCK" --json | grep -q '"desired":"hold"'
+          .build/release/hawdl status  --socket "$SOCK" --json | grep -q '"actual":"down"'
+          .build/release/hawdl release --socket "$SOCK" --json | grep -q '"desired":"release"'
+          .build/release/hawdl status  --socket "$SOCK" --json | grep -q '"actual":"up"'
+          grep -q '"desired":"release"' "$STATE"
+
+          # SIGTERM must hand the interface back before exiting.
+          kill -TERM $DAEMON
+          wait $DAEMON || true
+          test ! -S "$SOCK"
