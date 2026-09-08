@@ -1,17 +1,19 @@
 # hawdl
 
-macOS の `awdl0` を落としたまま維持し続けるツール。
+Keep macOS's `awdl0` interface down, and keep it that way.
 
-`awdl0` (Apple Wireless Direct Link) は Wi-Fi と同じ無線を時分割で共有する。
-有効なままだとスループットが落ち、レイテンシにスパイクが出る。
-`sudo ifconfig awdl0 down` で落とせるが、AirDrop / Handoff / Sidecar の起動や
-スリープ復帰のたびに OS が勝手に up に戻す。
+*[日本語版 README](README.ja.md)*
 
-hawdl は「一度落とす」のではなく **落とした状態を維持し続ける**。
+`awdl0` (Apple Wireless Direct Link) time-shares the same radio as Wi-Fi. Leaving
+it up costs you throughput and adds latency spikes. `sudo ifconfig awdl0 down`
+takes it down, but macOS puts it straight back up whenever AirDrop, Handoff or
+Sidecar wants it — and again on every wake from sleep.
+
+hawdl doesn't take it down once. It **holds it down**.
 
 ```
 ┌─────────────┐     ┌──────────┐
-│ HawdlBar.app│     │ hawdl CLI│   ← ユーザー権限
+│ HawdlBar.app│     │ hawdl CLI│   ← user
 └──────┬──────┘     └────┬─────┘
        └────────┬────────┘
          Unix domain socket
@@ -19,81 +21,85 @@ hawdl は「一度落とす」のではなく **落とした状態を維持し�
                 │
          ┌──────▼──────┐
          │   hawdld    │              ← root (LaunchDaemon)
-         │  PF_ROUTE 監視              │
-         │  SIOCSIFFLAGS で down       │
-         │  desired state 永続化        │
+         │  PF_ROUTE watch             │
+         │  SIOCSIFFLAGS to drop it    │
+         │  desired state persisted    │
          └─────────────┘
 ```
 
-root 権限が必要な操作をデーモンに閉じ込めているので、GUI と CLI は sudo を要求しない。
+Everything needing root lives in the daemon, so the GUI and the CLI never ask
+you for a password.
 
 ---
 
-## ⚠️ 副作用 — 先に読むこと
+## ⚠️ What this breaks — read first
 
-`awdl0` を止めている間、以下は **動作しなくなる**:
+While AWDL is held down, these **stop working**:
 
 - AirDrop
-- Handoff / ユニバーサルクリップボード
+- Handoff / Universal Clipboard
 - Sidecar
-- ユニバーサルコントロール
-- 連係カメラ / 連係マークアップ
-- AirPlay の一部 (ピアツーピア接続)
+- Universal Control
+- Continuity Camera / Continuity Markup
+- Peer-to-peer AirPlay
 
-これらが必要になったら `hawdl release` かメニューバーの「AWDL を再開」で戻せる。
-`hawdld` を停止したときも自動で `up` に戻る。
+Need one of them back? `hawdl release`, or *AWDL を再開* from the menu bar.
+Stopping `hawdld` also restores the interface automatically.
 
-### 免責
+### Disclaimer
 
-`awdl0` の直接操作は **Apple の公式サポート外**。macOS のアップデートで挙動が変わる、
-あるいは動かなくなる可能性がある。このツールは MIT ライセンスで **無保証** で提供される。
-使用は自己責任で。
+Poking at `awdl0` directly is **not supported by Apple**. A macOS update could
+change the behaviour or break this outright. MIT licensed, **no warranty**. Use
+at your own risk.
 
 ---
 
-## スクリーンショット
+## Screenshots
 
-<!-- TODO: メニューバーを開いた状態のスクリーンショットを docs/menu.png に置いて差し替える -->
-![HawdlBar のメニュー](docs/menu.png)
+<!-- TODO: replace with a shot of the open menu bar item at docs/menu.png -->
+![The HawdlBar menu](docs/menu.png)
 
-<!-- TODO: `hawdl watch` の出力のスクリーンショット / asciinema を docs/watch.png に置いて差し替える -->
+<!-- TODO: replace with a shot or asciinema of `hawdl watch` at docs/watch.png -->
 ![hawdl watch](docs/watch.png)
 
 ---
 
-## インストール
+## Install
 
-personal tap 経由:
+From a personal tap:
 
 ```sh
 brew tap taross-f/hawdl
 brew install --HEAD taross-f/hawdl/hawdl
 ```
 
-> 現在の formula は head-only。タグ付きリリースが出たら `--HEAD` は不要になる。
+> The formula is head-only for now. `--HEAD` becomes unnecessary once there is a
+> tagged release.
 
-**デーモンの起動は必須**。これをやらないと `hawdl` も HawdlBar も話し相手がいない:
+**Starting the daemon is mandatory.** Without it, neither `hawdl` nor HawdlBar
+has anything to talk to:
 
 ```sh
 sudo brew services start hawdl
 ```
 
-`sudo` が要るのは、インターフェースのフラグ変更が root 権限を必要とするため。
-Homebrew の LaunchDaemon として `/Library/LaunchDaemons` に登録され、再起動後も自動で立ち上がる。
+`sudo` is required because changing interface flags needs root. Homebrew
+registers it as a LaunchDaemon under `/Library/LaunchDaemons`, so it comes back
+on reboot.
 
-### メニューバーアプリ
+### The menu bar app
 
-formula は `HawdlBar.app` を Homebrew の prefix 内に組み立てるが、
-`/Applications` への配置は自動ではやらない:
+The formula assembles `HawdlBar.app` inside the Homebrew prefix, but does not
+put it in `/Applications` for you:
 
 ```sh
 ln -sfn "$(brew --prefix hawdl)/HawdlBar.app" /Applications/HawdlBar.app
 open /Applications/HawdlBar.app
 ```
 
-`LSUIElement` が立っているので Dock にアイコンは出ない。メニューバーだけに常駐する。
+`LSUIElement` is set, so there is no Dock icon — it lives only in the menu bar.
 
-### ソースからビルド
+### From source
 
 ```sh
 git clone https://github.com/taross-f/hawdl.git
@@ -102,20 +108,21 @@ swift build -c release
 swift test
 ```
 
-必要環境: macOS 14 (Sonoma) 以降、Swift 5.9 以降。外部パッケージ依存はゼロ。
+Requires macOS 14 (Sonoma) or later and Swift 5.9+. Zero external package
+dependencies.
 
 ---
 
-## 使い方
+## Usage
 
 ```
-hawdl status     現在の状態を表示
-hawdl hold       awdl0 を落としたまま維持する
-hawdl release    維持をやめて awdl0 を up に戻す
-hawdl watch      状態変化を購読して流し続ける
+hawdl status     print the current state and exit
+hawdl hold       keep awdl0 down until released
+hawdl release    stop holding and bring awdl0 back up
+hawdl watch      stream state changes until interrupted
 
-  --socket <path>   制御ソケット (default: /var/run/hawdl.sock)
-  --json            生の JSON を出力
+  --socket <path>   control socket (default: /var/run/hawdl.sock)
+  --json            print raw protocol JSON instead of prose
   --version / --help
 ```
 
@@ -131,64 +138,74 @@ AWDL: held down  blocked=12  last=2025-09-07T10:23:45Z  daemon=0.1.0
 AWDL: held down  blocked=13  last=2025-09-07T10:24:02Z  daemon=0.1.0
 ```
 
-終了コード: `0` 正常 / `1` エラー / `2` 引数の誤り / `3` `hawdld` に接続できない。
+Exit codes: `0` ok, `1` error, `2` bad arguments, `3` cannot reach `hawdld`.
 
-### メニューバー
+### Menu bar
 
-| アイコン | 意味 |
+| Icon | Meaning |
 | --- | --- |
-| `wifi.slash` | hold 中 (awdl0 停止) |
-| `wifi` | release 中 (awdl0 動作) |
-| `wifi.exclamationmark` | `hawdld` に未接続 |
+| `wifi.slash` | Holding (awdl0 is down) |
+| `wifi` | Released (awdl0 is up) |
+| `wifi.exclamationmark` | Not connected to `hawdld` |
 
-メニューから状態表示、停止 / 再開のトグル、ログイン時に起動 (`SMAppService`)、
-`hawdld` のステータス確認ができる。デーモンが動いていなくてもクラッシュせず、
-3 秒間隔で再接続を試みながら起動コマンドを案内する。
+The menu shows the current state and offers a hold/release toggle, a *launch at
+login* switch (`SMAppService`), and the daemon's status. With the daemon not
+running it does not crash: it retries every 3 seconds and tells you what to run.
 
----
-
-## 動作の詳細
-
-- **監視は PF_ROUTE**。`RTM_IFINFO` を購読してイベント駆動で up を検知するので、
-  AirDrop を開いた瞬間に反応する。ポーリングではない。
-- **保険として 30 秒ごとの reconcile** も回す。イベントを取りこぼしても最大 30 秒で復旧する。
-- **インターフェース操作は ioctl**。`ifconfig` をサブプロセスで叩かず、
-  `SIOCGIFFLAGS` / `SIOCSIFFLAGS` で `IFF_UP` を直接操作する。
-- **フラップ防止**。10 秒以内に 5 回以上 up されたら指数バックオフ (1s → 2s → 4s … 上限 30s) を挟む。
-  OS と無限に殴り合って CPU を焼かないための安全弁。バックオフ中は
-  「インターフェースが静かになってから 1 ウィンドウ分」経つまで抜けない
-  (単純なスライディングウィンドウだと、遅延がウィンドウを追い越した瞬間に
-  カウンタが空になって高速リトライに逆戻りしてしまうため)。
-- **desired state は永続化される**。`/Library/Application Support/hawdl/state.json` に保存し、
-  デーモン起動時に復元する。再起動しても hold は続く。
-- **終了時は必ず up に戻す**。SIGTERM / SIGINT を受けたら `awdl0` を戻してから終了するので、
-  デーモンが死んだのに AirDrop が使えない、という状態にはならない。
-- **`awdl0` が無い環境**ではエラーで落ちず、`unavailable` を返してアイドルする。
+> The menu bar UI is in Japanese. Interface language is tracked as a separate
+> concern from this README.
 
 ---
 
-## セキュリティ上の注意
+## How it works
 
-**`/var/run/hawdl.sock` のパーミッションは 0666 です。**
-つまり **同一マシンのローカルユーザーなら誰でも `awdl0` をトグルできます**。
-リモートからは触れませんが、共用 Mac やゲストアカウントがある環境では、
-他のユーザーがあなたの AirDrop を無効化したり、逆に hold を解除したりできます。
-
-これは、メニューバーアプリが毎回 sudo を要求せずに済むようにするための意図的な妥協です。
-将来的に `admin` グループ限定 (`root:admin` + 0660) に絞る TODO が
-`Sources/HawdlCore/IPCServer.swift` にコメントとして残してあります。
-
-デーモン自身は root で動きますが、公開しているのは
-「`awdl0` の `IFF_UP` を読み書きする」という 1 つの操作だけです。
-任意コマンド実行や任意インターフェース操作の口は開けていません。
+- **PF_ROUTE is the primary signal.** The daemon subscribes to `RTM_IFINFO`, so
+  it reacts the instant AirDrop raises the interface. It does not poll.
+- **A 30 second reconcile timer** runs as a safety net. If an event is ever
+  missed, the worst case is 30 seconds of drift.
+- **Interface changes go through ioctl**, not a subprocess: `SIOCGIFFLAGS` /
+  `SIOCSIFFLAGS` flip `IFF_UP` directly. Spawning `ifconfig` per event is both
+  slow and fragile to parse, and the flap loop can fire many times a second
+  while AirDrop is opening.
+- **Flap protection.** Five unwanted `up` events inside 10 seconds trigger
+  exponential backoff (1s → 2s → 4s … capped at 30s), so the daemon never burns
+  a core losing a fight with the OS. A storm only ends once the interface has
+  been quiet for a full window *plus* the last delay imposed — a plain sliding
+  window is not enough, because once the delay outgrows the window the counter
+  empties and the daemon drops straight back into fast retries.
+- **The desired state is persisted** to
+  `/Library/Application Support/hawdl/state.json` and restored on start, so a
+  hold survives a reboot.
+- **Exit always restores the interface.** On SIGTERM or SIGINT the daemon brings
+  `awdl0` back up before exiting, so a dead daemon never leaves you without
+  AirDrop.
+- **No `awdl0`, no problem.** On a machine without the interface the daemon
+  reports `unavailable` and idles instead of failing.
 
 ---
 
-## IPC プロトコル
+## Security note
 
-`/var/run/hawdl.sock` 上の、改行区切り JSON。1 行 1 メッセージ。
+**`/var/run/hawdl.sock` is mode 0666**, which means **any local user on this
+machine can toggle `awdl0`**. Nothing is reachable remotely, but on a shared Mac
+or one with guest accounts, another user can disable your AirDrop — or release
+your hold.
 
-リクエスト:
+This is a deliberate trade-off so the menu bar app never has to ask for `sudo`.
+A TODO to restrict the socket to the `admin` group (`root:admin`, 0660) is left
+in `Sources/HawdlCore/IPCServer.swift`.
+
+The daemon itself runs as root, but the only thing it exposes is a single
+operation: read and write `IFF_UP` on one interface. There is no arbitrary
+command execution and no way to name a different interface over the socket.
+
+---
+
+## IPC protocol
+
+Newline-delimited JSON over `/var/run/hawdl.sock`. One message per line.
+
+Requests:
 
 ```json
 {"cmd": "status"}
@@ -197,97 +214,104 @@ AWDL: held down  blocked=13  last=2025-09-07T10:24:02Z  daemon=0.1.0
 {"cmd": "subscribe"}
 ```
 
-レスポンス / プッシュ:
+Response / push:
 
 ```json
 {"actual":"down","available":true,"daemonVersion":"0.1.0","desired":"hold","flapCount":12,"lastFlapAt":"2025-09-07T10:23:45Z"}
 ```
 
-| フィールド | 意味 |
+| Field | Meaning |
 | --- | --- |
-| `desired` | `hold` / `release` — ユーザーが望んでいる状態 |
-| `actual` | `up` / `down` / `unavailable` / `unknown` — 実際の `awdl0` の状態 |
-| `available` | `awdl0` がこのマシンに存在するか (`actual != "unavailable"`) |
-| `flapCount` | hold 中に OS が up に戻した回数 |
-| `lastFlapAt` | 直近のフラップ時刻 (ISO 8601 / UTC)。一度も無ければキー自体が省略される |
-| `daemonVersion` | `hawdld` のバージョン |
+| `desired` | `hold` / `release` — what the user asked for |
+| `actual` | `up` / `down` / `unavailable` / `unknown` — what `awdl0` is doing |
+| `available` | Whether `awdl0` exists on this machine (`actual != "unavailable"`) |
+| `flapCount` | How many times the OS raised the interface while holding |
+| `lastFlapAt` | Most recent flap (ISO 8601, UTC). Omitted entirely if there has never been one |
+| `daemonVersion` | `hawdld`'s version |
 
-`subscribe` の場合は接続を維持し、状態が変わるたびにプッシュする。
+`subscribe` keeps the connection open and pushes a new line on every change.
 
 ```sh
-# nc でも喋れる
+# nc speaks it too
 echo '{"cmd":"status"}' | nc -U /var/run/hawdl.sock
 ```
 
 ---
 
-## アンインストール
+## Uninstall
 
 ```sh
-# 1. デーモンを止める (このとき awdl0 は up に戻る)
+# 1. Stop the daemon (this brings awdl0 back up)
 sudo brew services stop hawdl
 
-# 2. 実際に戻ったことを確認する
+# 2. Confirm it actually came back
 ifconfig awdl0 | head -1
 #   awdl0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1484
-#                  ^^ UP が入っていること
+#                  ^^ UP should be present
 
-# 3. メニューバーアプリのシンボリックリンクを外す
+# 3. Remove the menu bar app symlink
 rm -f /Applications/HawdlBar.app
 
-# 4. アンインストール
+# 4. Uninstall
 brew uninstall hawdl
 brew untap taross-f/hawdl
 
-# 5. 残った状態ファイルを消す
+# 5. Remove the leftover state file
 sudo rm -rf "/Library/Application Support/hawdl"
 ```
 
-`UP` が入っていない場合は `sudo ifconfig awdl0 up` で手動で戻せる。
-ログイン項目に HawdlBar を登録していた場合は、システム設定 →
-一般 → ログイン項目 から外すこと。
+If `UP` is missing, `sudo ifconfig awdl0 up` restores it by hand. If you added
+HawdlBar as a login item, remove it under System Settings → General → Login
+Items.
 
 ---
 
-## 開発
+## Development
 
 ```sh
-swift test                    # HawdlCore のユニットテストと IPC の結合テスト
+swift test                    # HawdlCore unit tests plus the IPC integration tests
 swift build -c release
 ```
 
-テストは root も実機の `awdl0` も要求しない。インターフェース操作は
-`InterfaceController` プロトコルの背後にあり、テストでは `FakeInterfaceController` を注入する。
+The tests need neither root nor a real `awdl0`. Interface access sits behind the
+`InterfaceController` protocol, and the tests inject `FakeInterfaceController`.
 
-デーモンのロジックを root なしで動かしたいとき:
+To exercise the daemon's logic without root:
 
 ```sh
 .build/debug/hawdld --dry-run --socket /tmp/hawdl.sock --state /tmp/hawdl-state.json --verbose
 .build/debug/hawdl status --socket /tmp/hawdl.sock
 ```
 
-実機で確認するとき (AirDrop を開いて即座に down に戻ることを見る):
+To verify against real hardware — watch it drop the interface the moment AirDrop
+opens:
 
 ```sh
 sudo .build/debug/hawdld --verbose
-# 別のターミナルで
+# in another terminal
 .build/debug/hawdl hold
 .build/debug/hawdl watch
-# → AirDrop を開くと flapCount が増え、awdl0 がすぐ down に戻る
+# → open AirDrop: flapCount climbs and awdl0 goes straight back down
 ```
 
-### 構成
+### Layout
 
-| ターゲット | 中身 |
+| Target | Contents |
 | --- | --- |
-| `HawdlCore` | 状態機械、バックオフ、IPC プロトコルとソケット、状態の永続化、インターフェース抽象 |
-| `CHawdlSys` | C シム。`SIOCGIFFLAGS` / `SIOCSIFFLAGS` は `_IOWR()` マクロ由来で Swift から import できず、`ioctl(2)` は C 可変長引数、`struct ifreq` の無名共用体も import が安定しないため。外部依存ではなく本パッケージの一部 |
-| `hawdld` | LaunchDaemon。PF_ROUTE 監視、タイマー、シグナル、ソケットサーバの配線 |
-| `hawdl` | CLI |
-| `HawdlBar` | SwiftUI `MenuBarExtra` のメニューバーアプリ |
+| `HawdlCore` | State machine, backoff, IPC protocol and sockets, state persistence, interface abstraction |
+| `CHawdlSys` | C shim. `SIOCGIFFLAGS` / `SIOCSIFFLAGS` come from the `_IOWR()` macros and cannot be imported into Swift, `ioctl(2)` is C-variadic, and `struct ifreq`'s anonymous union does not import reliably. Not an external dependency — part of this package |
+| `hawdld` | The LaunchDaemon: PF_ROUTE watching, timers, signals, socket server wiring |
+| `hawdl` | The CLI |
+| `HawdlBar` | SwiftUI `MenuBarExtra` menu bar app |
+
+**A process hosting an `IPCServer` must ignore SIGPIPE**, as `hawdld` does in
+`run()`. Sockets get `SO_NOSIGPIPE` where possible, but that call itself fails
+when the peer has already hung up before `accept` returns — which is exactly the
+connection whose reply then raises the signal. Darwin has no per-write
+`MSG_NOSIGNAL`, so process-level disposition is the only complete answer.
 
 ---
 
-## ライセンス
+## License
 
-MIT. [LICENSE](LICENSE) を参照。
+MIT. See [LICENSE](LICENSE).
