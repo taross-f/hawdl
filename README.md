@@ -66,7 +66,23 @@ at your own risk.
 
 ## Install
 
-From a personal tap:
+### From a release build
+
+Each tag publishes a universal tarball (Apple Silicon and Intel) containing
+`hawdl`, `hawdld` and `HawdlBar.app`. Download it from
+[Releases](https://github.com/taross-f/hawdl/releases), then:
+
+```sh
+tar xzf hawdl-<version>-macos-universal.tar.gz
+cd hawdl-<version>-macos-universal
+xattr -dr com.apple.quarantine .
+```
+
+**These builds are unsigned and not notarized**, so macOS quarantines them on
+download and Gatekeeper blocks them until that attribute is cleared. The
+tarball's `INSTALL.md` covers the rest, including the LaunchDaemon plist.
+
+### From a personal tap
 
 ```sh
 brew tap taross-f/hawdl

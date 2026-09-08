@@ -65,7 +65,23 @@ root 権限が必要な操作をデーモンに閉じ込めているので、GUI
 
 ## インストール
 
-personal tap 経由:
+### リリースビルドを使う
+
+タグを打つたびに、`hawdl` / `hawdld` / `HawdlBar.app` を含む universal な
+tarball (Apple Silicon と Intel の両対応) が publish される。
+[Releases](https://github.com/taross-f/hawdl/releases) から取得して:
+
+```sh
+tar xzf hawdl-<version>-macos-universal.tar.gz
+cd hawdl-<version>-macos-universal
+xattr -dr com.apple.quarantine .
+```
+
+**このビルドは署名も公証もされていない**。ダウンロードすると macOS が隔離属性を
+付けるため、外さないと Gatekeeper に弾かれる。以降の手順 (LaunchDaemon の
+plist を含む) は tarball 内の `INSTALL.md` を参照。
+
+### personal tap 経由
 
 ```sh
 brew tap taross-f/hawdl
