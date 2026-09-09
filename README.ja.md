@@ -104,15 +104,28 @@ Homebrew の LaunchDaemon として `/Library/LaunchDaemons` に登録され、�
 
 ### メニューバーアプリ
 
-**この手順は必須で、見た目の問題ではない。** Homebrew の formula は
-`/Applications` に書き込まないため、`HawdlBar.app` は prefix 内に組み立てられる。
-リンクを張るまで起動する対象が存在せず、メニューバーにも何も出ない ―
-インストールに失敗したようにしか見えない:
+formula は `HawdlBar.app` を Homebrew の prefix 内に組み立てる。**必須なのは
+起動すること** — 自動で起動するものは何もなく、動いていなければメニューバーには
+何も出ない。インストールに失敗したようにしか見えない:
+
+```sh
+open "$(brew --prefix hawdl)/HawdlBar.app"
+```
+
+.app はどこに置いてあっても起動できるので、これだけで足りる。`/Applications` への
+リンクは任意の利便性 ― Spotlight と Launchpad に出るようになり、
+システム設定 → 一般 → ログイン項目 での表示もまともになる ― であって、
+起動できるようにするための手順ではない:
 
 ```sh
 ln -sfn "$(brew --prefix hawdl)/HawdlBar.app" /Applications/HawdlBar.app
-open /Applications/HawdlBar.app
 ```
+
+formula 自身が `/Applications` に書き込むことはできない。`brew install` は
+サンドボックス下で動き、自分の prefix 内にしか書けないため。Cask にすれば
+`/Applications` に入るが、Cask が入れるのは*ダウンロードした*成果物で、macOS は
+それを隔離する。このアプリは署名されていないので、その場合 Gatekeeper に
+弾かれる。ローカルビルドであることが隔離属性を回避している。
 
 `LSUIElement` が立っているので Dock にアイコンは出ない。メニューバーだけに常駐する。
 
@@ -272,7 +285,7 @@ ifconfig awdl0 | head -1
 #   awdl0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1484
 #                  ^^ UP が入っていること
 
-# 3. メニューバーアプリのシンボリックリンクを外す
+# 3. HawdlBar を終了し、リンクを張っていた場合は外す
 rm -f /Applications/HawdlBar.app
 
 # 4. アンインストール

@@ -107,15 +107,28 @@ on reboot.
 
 ### The menu bar app
 
-**This step is required, not cosmetic.** Homebrew formulae do not write to
-`/Applications`, so the formula assembles `HawdlBar.app` inside its own prefix.
-Until you link it there is nothing to launch and nothing appears in the menu
-bar — which looks exactly like the app failing to install:
+The formula assembles `HawdlBar.app` inside the Homebrew prefix. **The required
+step is launching it** — nothing launches it for you, and until it is running
+there is no menu bar item, which looks exactly like the app failing to install:
+
+```sh
+open "$(brew --prefix hawdl)/HawdlBar.app"
+```
+
+A bundle runs from wherever it lives, so that is enough on its own. Linking it
+into `/Applications` is optional convenience — it puts the app in Spotlight and
+Launchpad and gives it a sane entry under System Settings -> General -> Login
+Items — but it is not what makes it launch:
 
 ```sh
 ln -sfn "$(brew --prefix hawdl)/HawdlBar.app" /Applications/HawdlBar.app
-open /Applications/HawdlBar.app
 ```
+
+Homebrew formulae cannot write to `/Applications` themselves: `brew install`
+runs sandboxed and may only write inside its own prefix. Shipping the app as a
+Cask instead would put it there, but a Cask installs a *downloaded* artifact,
+which macOS quarantines — and this app is unsigned, so Gatekeeper would then
+refuse to open it. Building locally is what keeps the quarantine attribute off.
 
 `LSUIElement` is set, so there is no Dock icon — it lives only in the menu bar.
 
@@ -287,7 +300,7 @@ ifconfig awdl0 | head -1
 #   awdl0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1484
 #                  ^^ UP should be present
 
-# 3. Remove the menu bar app symlink
+# 3. Quit HawdlBar, and remove the symlink if you made one
 rm -f /Applications/HawdlBar.app
 
 # 4. Uninstall
