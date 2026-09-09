@@ -34,8 +34,22 @@ final class MenuModel: ObservableObject {
     init(socketPath: String = HawdlPaths.socket, reconnectDelay: TimeInterval = 3, autoStart: Bool = true) {
         self.socketPath = socketPath
         self.reconnectDelay = reconnectDelay
-        self.launchAtLogin = (SMAppService.mainApp.status == .enabled)
         if autoStart { start() }
+    }
+
+    /// SMAppService needs a properly bundled app and misbehaves without one —
+    /// a bare `swift build` executable, say. Nothing here is worth failing to
+    /// appear over, so the lookup happens when the menu opens rather than in
+    /// `init`, where a bad result would take the whole app down before the
+    /// status item ever exists.
+    private static var isBundledApp: Bool {
+        Bundle.main.bundleIdentifier != nil
+    }
+
+    /// Called when the menu opens, so the toggle reflects reality even if the
+    /// login item was changed in System Settings.
+    func refreshLaunchAtLogin() {
+        launchAtLogin = Self.isBundledApp && SMAppService.mainApp.status == .enabled
     }
 
     /// Cancellation flag shared with the worker thread.
@@ -121,6 +135,10 @@ final class MenuModel: ObservableObject {
     static let startCommand = "sudo brew services start hawdl"
 
     func setLaunchAtLogin(_ enabled: Bool) {
+        guard Self.isBundledApp else {
+            NSLog("hawdl: not running from an app bundle; the login item is unavailable")
+            return
+        }
         do {
             if enabled {
                 try SMAppService.mainApp.register()
@@ -130,7 +148,7 @@ final class MenuModel: ObservableObject {
         } catch {
             NSLog("hawdl: could not update the login item: %@", "\(error)")
         }
-        launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        refreshLaunchAtLogin()
     }
 
     func quit() {

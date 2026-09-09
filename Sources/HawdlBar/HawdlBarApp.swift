@@ -19,6 +19,7 @@ struct MenuContent: View {
 
     var body: some View {
         Text(model.stateText)
+            .onAppear { model.refreshLaunchAtLogin() }
 
         Divider()
 
