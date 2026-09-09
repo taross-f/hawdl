@@ -66,15 +66,33 @@ at your own risk.
 
 ## Install
 
-From a personal tap:
+### From a release build
+
+Each tag publishes a universal tarball (Apple Silicon and Intel) containing
+`hawdl`, `hawdld` and `HawdlBar.app`. Download it from
+[Releases](https://github.com/taross-f/hawdl/releases), then:
+
+```sh
+tar xzf hawdl-<version>-macos-universal.tar.gz
+cd hawdl-<version>-macos-universal
+xattr -dr com.apple.quarantine .
+```
+
+**These builds are unsigned and not notarized**, so macOS quarantines them on
+download and Gatekeeper blocks them until that attribute is cleared. The
+tarball's `INSTALL.md` covers the rest, including the LaunchDaemon plist.
+
+### From a personal tap
 
 ```sh
 brew tap taross-f/hawdl
 brew install --HEAD taross-f/hawdl/hawdl
 ```
 
-> The formula is head-only for now. `--HEAD` becomes unnecessary once there is a
-> tagged release.
+> The formula is head-only for now, so `--HEAD` is required; it becomes
+> unnecessary once there is a tagged release. It lives in
+> [taross-f/homebrew-hawdl](https://github.com/taross-f/homebrew-hawdl), not in
+> this repository, so there is only one copy to keep current.
 
 **Starting the daemon is mandatory.** Without it, neither `hawdl` nor HawdlBar
 has anything to talk to:

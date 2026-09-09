@@ -1,0 +1,237 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Verify the packaging path whenever the pieces it depends on change, so a
+  # broken release workflow is caught on a PR instead of on a tag.
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - Package.swift
+      - Sources/HawdlBar/Resources/Info.plist
+      - Sources/HawdlCore/Version.swift
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: build and package
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version
+
+      # The binaries report hawdlVersion, and Info.plist carries its own copy.
+      # A tag that disagrees with either would ship a build that lies about
+      # what it is, so refuse to release one.
+      - name: Resolve and check the version
+        id: version
+        run: |
+          set -euo pipefail
+          source_version="$(sed -n 's/^public let hawdlVersion = "\(.*\)"$/\1/p' Sources/HawdlCore/Version.swift)"
+          if [ -z "$source_version" ]; then
+            echo "::error::could not read hawdlVersion from Sources/HawdlCore/Version.swift"
+            exit 1
+          fi
+          echo "version=$source_version" >> "$GITHUB_OUTPUT"
+          echo "hawdlVersion = $source_version"
+
+          plist_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+            Sources/HawdlBar/Resources/Info.plist)"
+          if [ "$plist_version" != "$source_version" ]; then
+            echo "::error::Info.plist CFBundleShortVersionString ($plist_version) != hawdlVersion ($source_version)"
+            exit 1
+          fi
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [ "$tag_version" != "$source_version" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} does not match hawdlVersion $source_version"
+              exit 1
+            fi
+          fi
+
+      # Universal so one artifact covers both Apple Silicon and Intel.
+      - name: Build (release, universal)
+        id: build
+        run: |
+          set -euo pipefail
+          swift build -c release --disable-sandbox --arch arm64 --arch x86_64
+          bin="$(swift build -c release --disable-sandbox --arch arm64 --arch x86_64 --show-bin-path)"
+          echo "bin=$bin" >> "$GITHUB_OUTPUT"
+          echo "binaries in $bin"
+
+      - name: Verify every binary is universal
+        run: |
+          set -euo pipefail
+          bin="${{ steps.build.outputs.bin }}"
+          for exe in hawdl hawdld HawdlBar; do
+            lipo -info "$bin/$exe"
+            lipo -archs "$bin/$exe" | grep -qw arm64
+            lipo -archs "$bin/$exe" | grep -qw x86_64
+          done
+
+      - name: Smoke test the binaries
+        run: |
+          set -euo pipefail
+          bin="${{ steps.build.outputs.bin }}"
+          "$bin/hawdl" --version
+          "$bin/hawdld" --version
+          "$bin/hawdl" --help > /dev/null
+
+      - name: Assemble the tarball
+        id: package
+        run: |
+          set -euo pipefail
+          bin="${{ steps.build.outputs.bin }}"
+          version="${{ steps.version.outputs.version }}"
+          name="hawdl-$version-macos-universal"
+          stage="dist/$name"
+
+          mkdir -p "$stage/HawdlBar.app/Contents/MacOS"
+          cp "$bin/hawdl" "$bin/hawdld" "$stage/"
+          cp "$bin/HawdlBar" "$stage/HawdlBar.app/Contents/MacOS/"
+          cp Sources/HawdlBar/Resources/Info.plist "$stage/HawdlBar.app/Contents/"
+          cp LICENSE README.md README.ja.md "$stage/"
+          cp .github/release-assets/INSTALL.md "$stage/"
+
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          rm -rf "$stage"
+
+          checksum="$(shasum -a 256 "dist/$name.tar.gz" | cut -d' ' -f1)"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+          echo "$checksum  $name.tar.gz"
+
+      # Unpack what we just built and run it, so a broken bundle or a missing
+      # file fails here rather than on a user's machine.
+      - name: Verify the tarball
+        run: |
+          set -euo pipefail
+          name="${{ steps.package.outputs.name }}"
+          work="$(mktemp -d)"
+          tar -C "$work" -xzf "dist/$name.tar.gz"
+          root="$work/$name"
+
+          test -x "$root/hawdl"
+          test -x "$root/hawdld"
+          test -x "$root/HawdlBar.app/Contents/MacOS/HawdlBar"
+          test -f "$root/HawdlBar.app/Contents/Info.plist"
+          test -f "$root/INSTALL.md"
+          test -f "$root/LICENSE"
+
+          "$root/hawdl" --version
+          # LSUIElement must survive into the shipped bundle, or the menu bar
+          # app takes over the Dock and the menu bar on first launch.
+          /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$root/HawdlBar.app/Contents/Info.plist" | grep -qi true
+
+          sock=/tmp/hawdl-release-check.sock
+          state=/tmp/hawdl-release-check.json
+          "$root/hawdld" --dry-run --socket "$sock" --state "$state" &
+          daemon=$!
+          trap 'kill $daemon 2>/dev/null || true' EXIT
+          for _ in $(seq 1 50); do
+            if [ -S "$sock" ]; then break; fi
+            sleep 0.1
+          done
+          test -S "$sock"
+          "$root/hawdl" hold --socket "$sock" --json | grep -q '"desired":"hold"'
+          kill -TERM $daemon
+          wait $daemon || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+      # The formula's stable stanza needs the checksum of the source tarball
+      # GitHub generates for the tag, so publish it with the release rather
+      # than making someone download and hash it by hand.
+      - name: Checksum the source tarball
+        id: source
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
+          if curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -o source.tar.gz "$url"; then
+            checksum="$(shasum -a 256 source.tar.gz | cut -d' ' -f1)"
+            echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+            echo "$checksum  $url"
+          else
+            echo "::warning::could not fetch $url; the formula checksum is not in the release notes"
+            echo "checksum=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write the release notes
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          name="${{ steps.package.outputs.name }}"
+
+          {
+            echo "Universal build (Apple Silicon and Intel) of \`hawdl\`, \`hawdld\` and \`HawdlBar.app\`."
+            echo
+            echo "### Install"
+            echo
+            echo '```sh'
+            echo "tar xzf $name.tar.gz"
+            echo "cd $name"
+            echo '```'
+            echo
+            echo "**This build is unsigned and not notarized.** macOS quarantines anything"
+            echo "downloaded from a browser, so clear the attribute before first run:"
+            echo
+            echo '```sh'
+            echo "xattr -dr com.apple.quarantine ."
+            echo '```'
+            echo
+            echo "Then follow \`INSTALL.md\` in the tarball."
+            echo
+            echo "### Checksums"
+            echo
+            echo '```'
+            echo "${{ steps.package.outputs.checksum }}  $name.tar.gz"
+            echo '```'
+            if [ -n "${{ steps.source.outputs.checksum }}" ]; then
+              echo
+              echo "For the Homebrew formula's stable stanza:"
+              echo
+              echo '```ruby'
+              echo "url \"https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz\""
+              echo "sha256 \"${{ steps.source.outputs.checksum }}\""
+              echo '```'
+            fi
+            echo
+            echo "### Reminder"
+            echo
+            echo "Holding AWDL down disables AirDrop, Handoff, Sidecar, Universal Control"
+            echo "and Continuity Camera. \`hawdl release\` puts it back."
+          } > release-notes.md
+
+          cat release-notes.md
+
+      - name: Create the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            dist/*.tar.gz
