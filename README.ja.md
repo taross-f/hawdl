@@ -104,13 +104,28 @@ Homebrew の LaunchDaemon として `/Library/LaunchDaemons` に登録され、�
 
 ### メニューバーアプリ
 
-formula は `HawdlBar.app` を Homebrew の prefix 内に組み立てるが、
-`/Applications` への配置は自動ではやらない:
+formula は `HawdlBar.app` を Homebrew の prefix 内に組み立てる。**必須なのは
+起動すること** — 自動で起動するものは何もなく、動いていなければメニューバーには
+何も出ない。インストールに失敗したようにしか見えない:
+
+```sh
+open "$(brew --prefix hawdl)/HawdlBar.app"
+```
+
+.app はどこに置いてあっても起動できるので、これだけで足りる。`/Applications` への
+リンクは任意の利便性 ― Spotlight と Launchpad に出るようになり、
+システム設定 → 一般 → ログイン項目 での表示もまともになる ― であって、
+起動できるようにするための手順ではない:
 
 ```sh
 ln -sfn "$(brew --prefix hawdl)/HawdlBar.app" /Applications/HawdlBar.app
-open /Applications/HawdlBar.app
 ```
+
+formula 自身が `/Applications` に書き込むことはできない。`brew install` は
+サンドボックス下で動き、自分の prefix 内にしか書けないため。Cask にすれば
+`/Applications` に入るが、Cask が入れるのは*ダウンロードした*成果物で、macOS は
+それを隔離する。このアプリは署名されていないので、その場合 Gatekeeper に
+弾かれる。ローカルビルドであることが隔離属性を回避している。
 
 `LSUIElement` が立っているので Dock にアイコンは出ない。メニューバーだけに常駐する。
 
@@ -124,6 +139,23 @@ swift test
 ```
 
 必要環境: macOS 14 (Sonoma) 以降、Swift 5.9 以降。外部パッケージ依存はゼロ。
+
+`hawdl` と `hawdld` は `.build/release` から直接実行できる。メニューバーアプリは
+できない ― SwiftPM が吐くのは素のバイナリで、`MenuBarExtra` が `LSUIElement` を
+効かせるには実体のあるバンドルが要る。組み立てる:
+
+```sh
+mkdir -p HawdlBar.app/Contents/MacOS
+cp .build/release/HawdlBar HawdlBar.app/Contents/MacOS/
+cp Sources/HawdlBar/Resources/Info.plist HawdlBar.app/Contents/
+codesign --force --deep --sign - HawdlBar.app
+open HawdlBar.app
+```
+
+**`codesign` は省略不可**。`swift build` は素のバイナリを ad-hoc 署名するため、
+後から `Info.plist` を足すとバンドルが署名後に変わった状態になり、macOS は起動を
+拒否する。エラーも出ずメニューバーにも出ないので、「アプリが何もしていない」ように
+しか見えない。`codesign --verify --deep --strict HawdlBar.app` で判別できる。
 
 ---
 
@@ -158,9 +190,15 @@ AWDL: held down  blocked=13  last=2025-09-07T10:24:02Z  daemon=0.1.0
 
 | アイコン | 意味 |
 | --- | --- |
-| `wifi.slash` | hold 中 (awdl0 停止) |
-| `wifi` | release 中 (awdl0 動作) |
-| `wifi.exclamationmark` | `hawdld` に未接続 |
+| `antenna.radiowaves.left.and.right.slash` | hold 中 (awdl0 停止) |
+| `antenna.radiowaves.left.and.right` | release 中 (awdl0 動作) |
+| `exclamationmark.triangle` | `hawdld` に未接続、または awdl0 が存在しない |
+
+`wifi` 系は意図的に避けている。`wifi.slash` は macOS が *Wi-Fi オフ* に使って
+いるグリフそのもので、awdl0 を止めても Wi-Fi は切れないため、そう見せてはいけない。
+`wifi` に至ってはシステムの Wi-Fi メニュー項目と同一のグリフで、数ピクセル隣に
+並ぶことになる。シンボルが利用できない場合はログを出して置き換え前の `wifi` 系に
+フォールバックする。メニューバーに何も出ないほうが、誤解を招くアイコンより悪いため。
 
 メニューから状態表示、停止 / 再開のトグル、ログイン時に起動 (`SMAppService`)、
 `hawdld` のステータス確認ができる。デーモンが動いていなくてもクラッシュせず、
@@ -253,7 +291,7 @@ ifconfig awdl0 | head -1
 #   awdl0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1484
 #                  ^^ UP が入っていること
 
-# 3. メニューバーアプリのシンボリックリンクを外す
+# 3. HawdlBar を終了し、リンクを張っていた場合は外す
 rm -f /Applications/HawdlBar.app
 
 # 4. アンインストール
