@@ -164,6 +164,75 @@ bar item, which looks exactly like the app doing nothing. `codesign --verify
 
 ---
 
+## Updating
+
+### From the tap
+
+`brew upgrade` on its own will **never** update this. The formula is head-only,
+and Homebrew does not check upstream for a HEAD install unless asked to — it
+reports the package as up to date indefinitely:
+
+```sh
+brew update                                     # pull the latest formula
+brew upgrade --fetch-HEAD taross-f/hawdl/hawdl  # --fetch-HEAD is not optional
+```
+
+`brew reinstall taross-f/hawdl/hawdl` is the blunter equivalent: it always
+rebuilds from current HEAD, changed or not.
+
+Neither of them restarts anything. Until you do, the daemon and the menu bar
+app are both still running the previous binaries:
+
+```sh
+sudo brew services restart hawdl
+pkill -x HawdlBar && open "$(brew --prefix hawdl)/HawdlBar.app"
+```
+
+**Restarting the daemon brings awdl0 back up for a moment.** That is deliberate,
+not a bug: `hawdld` always restores the interface before exiting, and the new
+process then reads `state.json` and re-applies the hold. A hold survives the
+upgrade — AirDrop and friends just work for a second or two in the gap.
+
+A `/Applications/HawdlBar.app` made with `ln -sfn` points at the opt prefix,
+which is stable across versions, so it keeps working. One made with `cp -R`
+does not: it still holds the old build.
+
+### From a release build
+
+The tarball has no updater. Replace the pieces and reload:
+
+```sh
+tar xzf hawdl-<version>-macos-universal.tar.gz
+cd hawdl-<version>-macos-universal
+xattr -dr com.apple.quarantine .
+
+sudo launchctl unload -w /Library/LaunchDaemons/com.github.taross-f.hawdl.hawdld.plist
+sudo install -m 755 hawdl hawdld /usr/local/bin/
+sudo launchctl load -w /Library/LaunchDaemons/com.github.taross-f.hawdl.hawdld.plist
+
+pkill -x HawdlBar
+rm -rf /Applications/HawdlBar.app
+cp -R HawdlBar.app /Applications/
+open /Applications/HawdlBar.app
+```
+
+`/Library/Application Support/hawdl/state.json` is left alone, so a hold
+survives. Re-check the plist in the tarball's `INSTALL.md` if the daemon's
+arguments changed between versions.
+
+### Checking what is actually running
+
+```sh
+hawdl --version    # the CLI you just installed
+hawdl status       # reports the running daemon's version
+```
+
+If `hawdl status` shows an older `daemon=` than `hawdl --version`, the daemon
+was not restarted. The menu bar app has no version display; if in doubt, quit
+and relaunch it.
+
+---
+
 ## Usage
 
 ```

@@ -96,6 +96,35 @@ While AWDL is held down, **AirDrop, Handoff, Sidecar, Universal Control and
 Continuity Camera stop working**. `hawdl release` puts it back, and so does
 stopping the daemon — `hawdld` always restores the interface before it exits.
 
+## Updating
+
+There is no updater. Download the newer tarball, then replace the pieces and
+reload the daemon:
+
+```sh
+xattr -dr com.apple.quarantine .
+
+sudo launchctl unload -w /Library/LaunchDaemons/com.github.taross-f.hawdl.hawdld.plist
+sudo install -m 755 hawdl hawdld /usr/local/bin/
+sudo launchctl load -w /Library/LaunchDaemons/com.github.taross-f.hawdl.hawdld.plist
+
+pkill -x HawdlBar
+rm -rf /Applications/HawdlBar.app
+cp -R HawdlBar.app /Applications/
+open /Applications/HawdlBar.app
+```
+
+Restarting the daemon brings awdl0 back up for a moment. That is deliberate:
+`hawdld` restores the interface before exiting, then the new process reads
+`/Library/Application Support/hawdl/state.json` and re-applies the hold, so a
+hold survives the update.
+
+The plist above is not rewritten by this. Re-check section 2 if the daemon's
+arguments changed between versions.
+
+`hawdl status` reports the running daemon's version — if it is older than
+`hawdl --version`, the daemon was not restarted.
+
 ## Uninstalling
 
 ```sh

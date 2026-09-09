@@ -159,6 +159,74 @@ open HawdlBar.app
 
 ---
 
+## アップデート
+
+### tap から
+
+`brew upgrade` だけでは**絶対に更新されない**。このフォーミュラは head-only で、
+Homebrew は HEAD インストールに対して明示的に指示しない限り上流を確認せず、
+いつまでも「最新」と報告し続ける:
+
+```sh
+brew update                                     # 最新のフォーミュラを取得
+brew upgrade --fetch-HEAD taross-f/hawdl/hawdl  # --fetch-HEAD は省略不可
+```
+
+`brew reinstall taross-f/hawdl/hawdl` はより雑な同等物で、変更の有無にかかわらず
+常に現在の HEAD からビルドし直す。
+
+どちらも再起動はしない。それまでデーモンもメニューバーアプリも古いバイナリのまま動き続ける:
+
+```sh
+sudo brew services restart hawdl
+pkill -x HawdlBar && open "$(brew --prefix hawdl)/HawdlBar.app"
+```
+
+**デーモンを再起動すると awdl0 は一瞬 up に戻る。** これは意図的な挙動でバグではない。
+`hawdld` は終了前に必ずインターフェースを復元し、新しいプロセスが `state.json` を
+読んで hold を再適用する。hold 自体はアップグレードをまたいで維持されるが、
+その隙間の 1〜2 秒だけ AirDrop などが動く。
+
+`ln -sfn` で作った `/Applications/HawdlBar.app` は opt prefix を指していて、
+これはバージョンをまたいで安定しているのでそのまま使える。`cp -R` でコピーした
+場合は駄目で、古いビルドを抱えたままになる。
+
+### リリースビルドから
+
+tarball に更新機構はない。差し替えて読み込み直す:
+
+```sh
+tar xzf hawdl-<version>-macos-universal.tar.gz
+cd hawdl-<version>-macos-universal
+xattr -dr com.apple.quarantine .
+
+sudo launchctl unload -w /Library/LaunchDaemons/com.github.taross-f.hawdl.hawdld.plist
+sudo install -m 755 hawdl hawdld /usr/local/bin/
+sudo launchctl load -w /Library/LaunchDaemons/com.github.taross-f.hawdl.hawdld.plist
+
+pkill -x HawdlBar
+rm -rf /Applications/HawdlBar.app
+cp -R HawdlBar.app /Applications/
+open /Applications/HawdlBar.app
+```
+
+`/Library/Application Support/hawdl/state.json` は触らないので hold は維持される。
+バージョン間でデーモンの引数が変わっている場合は tarball の `INSTALL.md` の
+plist を確認すること。
+
+### 実際に動いているものを確認する
+
+```sh
+hawdl --version    # 今入れた CLI
+hawdl status       # 動作中のデーモンのバージョンを表示
+```
+
+`hawdl status` の `daemon=` が `hawdl --version` より古ければ、デーモンが
+再起動されていない。メニューバーアプリにバージョン表示はないので、
+怪しければ終了して起動し直す。
+
+---
+
 ## 使い方
 
 ```
