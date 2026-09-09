@@ -67,6 +67,20 @@ open /Applications/HawdlBar.app
 
 `LSUIElement` is set, so it has no Dock icon and lives only in the menu bar.
 
+The bundle in this tarball is already ad-hoc signed. If it does not appear in
+the menu bar, check whether the signature survived the copy:
+
+```sh
+codesign --verify --deep --strict /Applications/HawdlBar.app
+```
+
+If that fails, re-sign it — macOS refuses to launch a bundle whose contents no
+longer match its signature, and does so silently:
+
+```sh
+codesign --force --deep --sign - /Applications/HawdlBar.app
+```
+
 ## Using it
 
 ```sh

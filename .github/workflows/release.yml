@@ -105,6 +105,12 @@ jobs:
           cp LICENSE README.md README.ja.md "$stage/"
           cp .github/release-assets/INSTALL.md "$stage/"
 
+          # swift build ad-hoc signs the bare executable. Dropping it into a
+          # bundle and adding Info.plist changes the bundle after that
+          # signature, which macOS refuses to launch. Re-sign the assembled
+          # bundle, or the app silently fails to appear in the menu bar.
+          codesign --force --deep --sign - "$stage/HawdlBar.app"
+
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           rm -rf "$stage"
 
@@ -129,6 +135,10 @@ jobs:
           test -f "$root/HawdlBar.app/Contents/Info.plist"
           test -f "$root/INSTALL.md"
           test -f "$root/LICENSE"
+
+          # A bundle whose signature does not cover its current contents will
+          # not launch, and the failure is silent: no menu bar item, no error.
+          codesign --verify --deep --strict "$root/HawdlBar.app"
 
           "$root/hawdl" --version
           # LSUIElement must survive into the shipped bundle, or the menu bar

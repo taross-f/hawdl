@@ -125,6 +125,23 @@ swift test
 
 必要環境: macOS 14 (Sonoma) 以降、Swift 5.9 以降。外部パッケージ依存はゼロ。
 
+`hawdl` と `hawdld` は `.build/release` から直接実行できる。メニューバーアプリは
+できない ― SwiftPM が吐くのは素のバイナリで、`MenuBarExtra` が `LSUIElement` を
+効かせるには実体のあるバンドルが要る。組み立てる:
+
+```sh
+mkdir -p HawdlBar.app/Contents/MacOS
+cp .build/release/HawdlBar HawdlBar.app/Contents/MacOS/
+cp Sources/HawdlBar/Resources/Info.plist HawdlBar.app/Contents/
+codesign --force --deep --sign - HawdlBar.app
+open HawdlBar.app
+```
+
+**`codesign` は省略不可**。`swift build` は素のバイナリを ad-hoc 署名するため、
+後から `Info.plist` を足すとバンドルが署名後に変わった状態になり、macOS は起動を
+拒否する。エラーも出ずメニューバーにも出ないので、「アプリが何もしていない」ように
+しか見えない。`codesign --verify --deep --strict HawdlBar.app` で判別できる。
+
 ---
 
 ## 使い方

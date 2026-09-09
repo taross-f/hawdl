@@ -129,6 +129,24 @@ swift test
 Requires macOS 14 (Sonoma) or later and Swift 5.9+. Zero external package
 dependencies.
 
+`hawdl` and `hawdld` can be run straight out of `.build/release`. The menu bar
+app cannot: SwiftPM only emits a bare executable, and `MenuBarExtra` needs a
+real bundle for `LSUIElement` to apply. Assemble one:
+
+```sh
+mkdir -p HawdlBar.app/Contents/MacOS
+cp .build/release/HawdlBar HawdlBar.app/Contents/MacOS/
+cp Sources/HawdlBar/Resources/Info.plist HawdlBar.app/Contents/
+codesign --force --deep --sign - HawdlBar.app
+open HawdlBar.app
+```
+
+**The `codesign` step is not optional.** `swift build` ad-hoc signs the bare
+executable; adding `Info.plist` afterwards changes the bundle out from under
+that signature, and macOS then refuses to launch it — with no error and no menu
+bar item, which looks exactly like the app doing nothing. `codesign --verify
+--deep --strict HawdlBar.app` tells you whether a bundle is in that state.
+
 ---
 
 ## Usage
