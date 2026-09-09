@@ -107,8 +107,10 @@ on reboot.
 
 ### The menu bar app
 
-The formula assembles `HawdlBar.app` inside the Homebrew prefix, but does not
-put it in `/Applications` for you:
+**This step is required, not cosmetic.** Homebrew formulae do not write to
+`/Applications`, so the formula assembles `HawdlBar.app` inside its own prefix.
+Until you link it there is nothing to launch and nothing appears in the menu
+bar — which looks exactly like the app failing to install:
 
 ```sh
 ln -sfn "$(brew --prefix hawdl)/HawdlBar.app" /Applications/HawdlBar.app

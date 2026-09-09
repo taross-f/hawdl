@@ -104,8 +104,10 @@ Homebrew の LaunchDaemon として `/Library/LaunchDaemons` に登録され、�
 
 ### メニューバーアプリ
 
-formula は `HawdlBar.app` を Homebrew の prefix 内に組み立てるが、
-`/Applications` への配置は自動ではやらない:
+**この手順は必須で、見た目の問題ではない。** Homebrew の formula は
+`/Applications` に書き込まないため、`HawdlBar.app` は prefix 内に組み立てられる。
+リンクを張るまで起動する対象が存在せず、メニューバーにも何も出ない ―
+インストールに失敗したようにしか見えない:
 
 ```sh
 ln -sfn "$(brew --prefix hawdl)/HawdlBar.app" /Applications/HawdlBar.app
