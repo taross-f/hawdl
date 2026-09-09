@@ -88,7 +88,10 @@ brew tap taross-f/hawdl
 brew install --HEAD taross-f/hawdl/hawdl
 ```
 
-> 現在の formula は head-only。タグ付きリリースが出たら `--HEAD` は不要になる。
+> 現在の formula は head-only なので `--HEAD` が要る。タグ付きリリースが出たら不要になる。
+> formula の実体は本リポジトリではなく
+> [taross-f/homebrew-hawdl](https://github.com/taross-f/homebrew-hawdl) にあり、
+> 二重管理を避けるため一箇所に集約している。
 
 **デーモンの起動は必須**。これをやらないと `hawdl` も HawdlBar も話し相手がいない:
 

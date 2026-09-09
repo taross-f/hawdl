@@ -31,7 +31,8 @@ jobs:
       - name: Test
         run: swift test -v
 
-      # This is what the Homebrew formula runs; keep it working.
+      # The Homebrew formula in taross-f/homebrew-hawdl builds with exactly
+      # this command, so a break here breaks `brew install`.
       - name: Build (release)
         run: swift build -c release --disable-sandbox
 
