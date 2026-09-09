@@ -195,9 +195,16 @@ Exit codes: `0` ok, `1` error, `2` bad arguments, `3` cannot reach `hawdld`.
 
 | Icon | Meaning |
 | --- | --- |
-| `wifi.slash` | Holding (awdl0 is down) |
-| `wifi` | Released (awdl0 is up) |
-| `wifi.exclamationmark` | Not connected to `hawdld` |
+| `antenna.radiowaves.left.and.right.slash` | Holding (awdl0 is down) |
+| `antenna.radiowaves.left.and.right` | Released (awdl0 is up) |
+| `exclamationmark.triangle` | Not connected to `hawdld`, or awdl0 is absent |
+
+Deliberately not the `wifi` family. `wifi.slash` is the glyph macOS uses for
+*Wi-Fi is off*, and holding awdl0 down does not turn Wi-Fi off — the icon must
+not imply it does. Plain `wifi` is the same glyph as the system Wi-Fi menu item
+a few pixels away. If a symbol turns out to be unavailable, the app logs it and
+falls back to the `wifi` glyph it replaces, because an invisible menu bar item
+is worse than a misleading one.
 
 The menu shows the current state and offers a hold/release toggle, a *launch at
 login* switch (`SMAppService`), and the daemon's status. With the daemon not

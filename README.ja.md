@@ -190,9 +190,15 @@ AWDL: held down  blocked=13  last=2025-09-07T10:24:02Z  daemon=0.1.0
 
 | アイコン | 意味 |
 | --- | --- |
-| `wifi.slash` | hold 中 (awdl0 停止) |
-| `wifi` | release 中 (awdl0 動作) |
-| `wifi.exclamationmark` | `hawdld` に未接続 |
+| `antenna.radiowaves.left.and.right.slash` | hold 中 (awdl0 停止) |
+| `antenna.radiowaves.left.and.right` | release 中 (awdl0 動作) |
+| `exclamationmark.triangle` | `hawdld` に未接続、または awdl0 が存在しない |
+
+`wifi` 系は意図的に避けている。`wifi.slash` は macOS が *Wi-Fi オフ* に使って
+いるグリフそのもので、awdl0 を止めても Wi-Fi は切れないため、そう見せてはいけない。
+`wifi` に至ってはシステムの Wi-Fi メニュー項目と同一のグリフで、数ピクセル隣に
+並ぶことになる。シンボルが利用できない場合はログを出して置き換え前の `wifi` 系に
+フォールバックする。メニューバーに何も出ないほうが、誤解を招くアイコンより悪いため。
 
 メニューから状態表示、停止 / 再開のトグル、ログイン時に起動 (`SMAppService`)、
 `hawdld` のステータス確認ができる。デーモンが動いていなくてもクラッシュせず、

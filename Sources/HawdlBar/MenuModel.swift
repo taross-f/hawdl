@@ -72,11 +72,40 @@ final class MenuModel: ObservableObject {
 
     // MARK: - Presentation
 
+    /// Deliberately not the `wifi` family. `wifi.slash` is the glyph macOS
+    /// itself uses for "Wi-Fi is off", and holding awdl0 down does not turn
+    /// Wi-Fi off — implying that is the one thing this icon must never do.
+    /// Plain `wifi` is worse: it is the same glyph as the system Wi-Fi menu
+    /// item sitting a few pixels away in the same menu bar.
+    ///
+    /// The antenna family reads as "radio link" rather than "your network is
+    /// broken", and its vertical mast does not collide with the Wi-Fi arcs at
+    /// menu bar size.
     var symbolName: String {
         guard connection == .connected, let status, status.available else {
-            return "wifi.exclamationmark"
+            return Symbol.unknown
         }
-        return status.desired == .hold ? "wifi.slash" : "wifi"
+        return status.desired == .hold ? Symbol.holding : Symbol.released
+    }
+
+    /// `Image(systemName:)` draws nothing at all for a name macOS does not
+    /// know — an invisible menu bar item, which is the exact bug this app has
+    /// already been debugged for once. These names have not been checked
+    /// against a real SF Symbols catalogue, so each is resolved once at
+    /// startup and falls back to the `wifi` glyph it replaces. Those are
+    /// semantically wrong, but a misleading icon still beats no icon.
+    private enum Symbol {
+        static let holding = resolve("antenna.radiowaves.left.and.right.slash", or: "wifi.slash")
+        static let released = resolve("antenna.radiowaves.left.and.right", or: "wifi")
+        static let unknown = resolve("exclamationmark.triangle", or: "wifi.exclamationmark")
+
+        private static func resolve(_ name: String, or fallback: String) -> String {
+            guard NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil else {
+                NSLog("hawdl: SF Symbol %@ is unavailable; falling back to %@", name, fallback)
+                return fallback
+            }
+            return name
+        }
     }
 
     var stateText: String {
