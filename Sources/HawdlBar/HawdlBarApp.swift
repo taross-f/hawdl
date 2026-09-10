@@ -28,7 +28,7 @@ struct MenuContent: View {
         }
         .disabled(!model.canToggle)
 
-        Toggle("ログイン時に起動", isOn: Binding(
+        Toggle(Strings.launchAtLogin, isOn: Binding(
             get: { model.launchAtLogin },
             set: { model.setLaunchAtLogin($0) }
         ))
@@ -38,14 +38,14 @@ struct MenuContent: View {
         Text(model.daemonText)
 
         if model.needsDaemonHelp {
-            Button("起動コマンドをコピー (\(MenuModel.startCommand))") {
+            Button(Strings.copyStartCommand(MenuModel.startCommand)) {
                 model.copyStartCommand()
             }
         }
 
         Divider()
 
-        Button("終了") {
+        Button(Strings.quit) {
             model.quit()
         }
         .keyboardShortcut("q")
