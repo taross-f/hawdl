@@ -279,8 +279,31 @@ The menu shows the current state and offers a hold/release toggle, a *launch at
 login* switch (`SMAppService`), and the daemon's status. With the daemon not
 running it does not crash: it retries every 3 seconds and tells you what to run.
 
-> The menu bar UI is in Japanese. Interface language is tracked as a separate
-> concern from this README.
+### Interface language
+
+The menu bar UI is Japanese when the system's primary language is Japanese, and
+English otherwise. It follows System Settings -> General -> Language & Region,
+reading the *first* entry of the preferred-language list: a list of German then
+Japanese gets English, because this app has no German and English is the closer
+answer of the two it does have.
+
+The language is read once at launch, so a system language change needs the app
+relaunched — the same as for a properly localized app.
+
+To force one language regardless of the system setting:
+
+```sh
+defaults write com.github.taross-f.hawdl.HawdlBar AppleLanguages -array en
+pkill -x HawdlBar && open "$(brew --prefix hawdl)/HawdlBar.app"
+```
+
+`defaults delete com.github.taross-f.hawdl.HawdlBar AppleLanguages` puts it
+back. The strings are compiled into the binary rather than loaded from `.lproj`
+resources, so the app does **not** appear under System Settings -> General ->
+Language & Region -> Applications, which only lists apps that declare their
+localizations. `UILanguage` in `Sources/HawdlCore` explains the tradeoff: the
+bundle is assembled by hand in several places, and a dropped resource directory
+would be an invisible failure.
 
 ---
 

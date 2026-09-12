@@ -111,27 +111,30 @@ final class MenuModel: ObservableObject {
     var stateText: String {
         switch connection {
         case .connecting:
-            return "AWDL: 接続中…"
+            return Strings.stateConnecting
         case .daemonMissing:
-            return "AWDL: hawdld が未起動"
+            return Strings.stateDaemonMissing
         case .failed(let detail):
-            return "AWDL: エラー (\(detail))"
+            return Strings.stateError(detail)
         case .connected:
-            guard let status else { return "AWDL: 状態不明" }
-            guard status.available else { return "AWDL: awdl0 がありません" }
-            let label = (status.desired == .hold) ? "停止中" : "動作中"
-            return "AWDL: \(label) (\(status.flapCount) 回ブロック)"
+            guard let status else { return Strings.stateUnknown }
+            guard status.available else { return Strings.stateNoInterface }
+            return status.desired == .hold
+                ? Strings.stateHeld(blocked: status.flapCount)
+                : Strings.stateReleased(blocked: status.flapCount)
         }
     }
 
     var daemonText: String {
         switch connection {
         case .connected:
-            return "hawdld: 接続済み (v\(status?.daemonVersion ?? hawdlVersion))"
+            return Strings.daemonConnected(version: status?.daemonVersion ?? hawdlVersion)
         case .connecting:
-            return "hawdld: 接続中…"
+            return Strings.daemonConnecting
         case .daemonMissing:
-            return "hawdld: 未起動"
+            return Strings.daemonMissing
+        // The detail is an error string from the socket layer, which has no
+        // translated form; it is passed through as-is in either language.
         case .failed(let detail):
             return "hawdld: \(detail)"
         }
@@ -147,7 +150,7 @@ final class MenuModel: ObservableObject {
     }
 
     var toggleTitle: String {
-        (status?.desired == .hold) ? "AWDL を再開" : "AWDL を停止"
+        (status?.desired == .hold) ? Strings.release : Strings.hold
     }
 
     // MARK: - Actions
