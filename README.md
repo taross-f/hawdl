@@ -96,9 +96,9 @@ not needed: installing by the fully qualified name taps it for you.
 
 > The formula lives in
 > [taross-f/homebrew-hawdl](https://github.com/taross-f/homebrew-hawdl), not in
-> this repository, so there is only one copy to keep current. The Release
-> workflow rewrites it on every tag rather than leaving it to be updated by
-> hand.
+> this repository, so there is only one copy to keep current. That tap checks
+> here hourly and updates itself from the newest release, so a fresh tag
+> reaches `brew` within the hour without anyone editing the formula.
 
 To track `main` instead of the latest release:
 
@@ -181,8 +181,9 @@ the source tarball `brew install` fetches. That makes a tap install visible at
 all — GitHub counts asset downloads only, and the source archive it generates
 for a tag is not an asset — but it is a download count, not an install count.
 Homebrew caches downloads, so a reinstall never shows up, while CI runs and
-mirrors do. A `--HEAD` install is a git clone and is never counted. Read it as
-a rough scale and nothing finer.
+mirrors do. A `--HEAD` install is a git clone and is never counted. The tap's
+own sync adds exactly one, per release, when it checksums the new tarball. Read
+it as a rough scale and nothing finer.
 
 ---
 

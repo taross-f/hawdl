@@ -25,10 +25,6 @@ jobs:
     name: build and package
     runs-on: macos-latest
     timeout-minutes: 30
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      source-name: ${{ steps.source.outputs.name }}
-      source-checksum: ${{ steps.source.outputs.checksum }}
     steps:
       - uses: actions/checkout@v4
 
@@ -251,8 +247,8 @@ jobs:
             echo "${{ steps.source.outputs.checksum }}  $source_name.tar.gz"
             echo '```'
             echo
-            echo "The formula's stable stanza, which the Release workflow writes into"
-            echo "taross-f/homebrew-hawdl on its own:"
+            echo "The formula's stable stanza. The tap syncs itself hourly, so there is"
+            echo "normally nothing to do with this by hand:"
             echo
             echo '```ruby'
             echo "url \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/$source_name.tar.gz\""
@@ -279,94 +275,3 @@ jobs:
             --verify-tag \
             dist/*.tar.gz
 
-  # The formula lives in taross-f/homebrew-hawdl so there is only one copy of
-  # it, which means a tag here has to reach across and update it there. Doing
-  # it by hand is what leaves a tap pointing at a version that no longer
-  # exists, and the checksum cannot be known before this run anyway.
-  bump-tap:
-    name: bump the tap formula
-    needs: package
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      # GITHUB_TOKEN is scoped to this repository, so pushing to the tap needs
-      # a PAT with contents write on taross-f/homebrew-hawdl. Without it the
-      # release still stands; only the tap is left behind, so warn rather than
-      # fail and leave a published release looking broken.
-      - name: Check for the tap token
-        id: token
-        env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -n "${TAP_TOKEN:-}" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::HOMEBREW_TAP_TOKEN is not set; update Formula/hawdl.rb by hand with the stanza in the release notes"
-          fi
-
-      - uses: actions/checkout@v4
-        if: steps.token.outputs.present == 'true'
-        with:
-          repository: taross-f/homebrew-hawdl
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          path: tap
-
-      - name: Rewrite the stable stanza
-        if: steps.token.outputs.present == 'true'
-        env:
-          VERSION: ${{ needs.package.outputs.version }}
-          TAG: ${{ github.ref_name }}
-          SOURCE_NAME: ${{ needs.package.outputs.source-name }}
-          CHECKSUM: ${{ needs.package.outputs.source-checksum }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os
-          import pathlib
-
-          version = os.environ["VERSION"]
-          url = (
-              "https://github.com/taross-f/hawdl/releases/download/"
-              f"{os.environ['TAG']}/{os.environ['SOURCE_NAME']}.tar.gz"
-          )
-
-          path = pathlib.Path("tap/Formula/hawdl.rb")
-          formula = path.read_text()
-
-          # The markers are what makes this rewrite safe: without them the
-          # obvious regex would also match the head stanza's url.
-          begin, end = "  # stable:begin\n", "  # stable:end\n"
-          start = formula.index(begin) + len(begin)
-          stop = formula.index(end)
-
-          # An explicit version: Homebrew would otherwise read "0.1.0-src" off
-          # the asset's filename.
-          stanza = (
-              f'  url "{url}"\n'
-              f'  version "{version}"\n'
-              f'  sha256 "{os.environ["CHECKSUM"]}"\n'
-          )
-          if formula[start:stop] == stanza:
-              print("formula already current")
-          else:
-              path.write_text(formula[:start] + stanza + formula[stop:])
-              print(stanza)
-          PY
-
-      - name: Commit and push
-        if: steps.token.outputs.present == 'true'
-        working-directory: tap
-        run: |
-          set -euo pipefail
-          if git diff --quiet; then
-            echo "nothing to commit"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/hawdl.rb
-          git commit -m "hawdl ${{ needs.package.outputs.version }}"
-          git push
