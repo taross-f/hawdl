@@ -36,6 +36,8 @@ jobs:
       # what it is, so refuse to release one.
       - name: Resolve and check the version
         id: version
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           source_version="$(sed -n 's/^public let hawdlVersion = "\(.*\)"$/\1/p' Sources/HawdlCore/Version.swift)"
@@ -53,12 +55,35 @@ jobs:
             exit 1
           fi
 
+          # A tag push always publishes. A manual run publishes only from the
+          # default branch: dispatching from a topic branch is how the
+          # packaging path gets exercised by hand, and that must not put a
+          # release on unmerged code.
           if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             tag_version="${GITHUB_REF_NAME#v}"
             if [ "$tag_version" != "$source_version" ]; then
               echo "::error::tag ${GITHUB_REF_NAME} does not match hawdlVersion $source_version"
               exit 1
             fi
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] \
+            && [ "${GITHUB_REF_NAME:-}" = "$DEFAULT_BRANCH" ]; then
+            tag="v$source_version"
+
+            # There is no tag to disagree with on this path, so the thing that
+            # goes wrong instead is dispatching without bumping the version.
+            # Catch it in seconds rather than after the universal build.
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+              echo "::error::$tag already exists; bump hawdlVersion in Sources/HawdlCore/Version.swift and Info.plist first"
+              exit 1
+            fi
+
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "will publish $tag from $GITHUB_SHA"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
 
       # Universal so one artifact covers both Apple Silicon and Intel.
@@ -206,12 +231,13 @@ jobs:
           if-no-files-found: error
 
       - name: Write the release notes
-        if: github.ref_type == 'tag'
+        if: steps.version.outputs.publish == 'true'
         run: |
           set -euo pipefail
           version="${{ steps.version.outputs.version }}"
           name="${{ steps.package.outputs.name }}"
           source_name="${{ steps.source.outputs.name }}"
+          tag="${{ steps.version.outputs.tag }}"
 
           {
             echo "Universal build (Apple Silicon and Intel) of \`hawdl\`, \`hawdld\` and \`HawdlBar.app\`."
@@ -251,7 +277,7 @@ jobs:
             echo "normally nothing to do with this by hand:"
             echo
             echo '```ruby'
-            echo "url \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/$source_name.tar.gz\""
+            echo "url \"https://github.com/${GITHUB_REPOSITORY}/releases/download/$tag/$source_name.tar.gz\""
             echo "sha256 \"${{ steps.source.outputs.checksum }}\""
             echo '```'
             echo
@@ -264,14 +290,29 @@ jobs:
           cat release-notes.md
 
       - name: Create the release
-        if: github.ref_type == 'tag'
+        if: steps.version.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --notes-file release-notes.md \
-            --verify-tag \
-            dist/*.tar.gz
+          tag="${{ steps.version.outputs.tag }}"
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            # The tag is already pushed. --verify-tag refuses to invent a
+            # different one if the ref somehow disappeared mid-run.
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes-file release-notes.md \
+              --verify-tag \
+              dist/*.tar.gz
+          else
+            # Nothing has tagged this commit yet: gh does it as it publishes,
+            # which is what makes a release reachable from the Actions tab
+            # without a local checkout.
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes-file release-notes.md \
+              --target "$GITHUB_SHA" \
+              dist/*.tar.gz
+          fi
 
