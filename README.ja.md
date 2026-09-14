@@ -1,5 +1,8 @@
 # hawdl
 
+[![Downloads](https://img.shields.io/github/downloads/taross-f/hawdl/total?label=downloads)](https://github.com/taross-f/hawdl/releases)
+[![Latest release](https://img.shields.io/github/v/release/taross-f/hawdl?label=release)](https://github.com/taross-f/hawdl/releases/latest)
+
 macOS の `awdl0` を落としたまま維持し続けるツール。
 
 *[English README](README.md)*
@@ -84,14 +87,22 @@ plist を含む) は tarball 内の `INSTALL.md` を参照。
 ### personal tap 経由
 
 ```sh
-brew tap taross-f/hawdl
-brew install --HEAD taross-f/hawdl/hawdl
+brew install taross-f/hawdl/hawdl
 ```
 
-> 現在の formula は head-only なので `--HEAD` が要る。タグ付きリリースが出たら不要になる。
+最新リリースをソースからビルドする。完全修飾名で指定すれば tap も自動で追加されるので、
+先に `brew tap taross-f/hawdl` を打つ必要はない。
+
 > formula の実体は本リポジトリではなく
 > [taross-f/homebrew-hawdl](https://github.com/taross-f/homebrew-hawdl) にあり、
-> 二重管理を避けるため一箇所に集約している。
+> 二重管理を避けるため一箇所に集約している。タグを打つと Release ワークフローが
+> 向こうの formula を書き換えるので、手で更新する必要はない。
+
+リリースではなく `main` を追いたい場合:
+
+```sh
+brew install --HEAD taross-f/hawdl/hawdl
+```
 
 **デーモンの起動は必須**。これをやらないと `hawdl` も HawdlBar も話し相手がいない:
 
@@ -157,18 +168,32 @@ open HawdlBar.app
 拒否する。エラーも出ずメニューバーにも出ないので、「アプリが何もしていない」ように
 しか見えない。`codesign --verify --deep --strict HawdlBar.app` で判別できる。
 
+### downloads バッジが数えているもの
+
+リリースアセット全体のダウンロード総数。上のユニバーサル tarball と、`brew install`
+が取得するソース tarball の合計になる。tap 経由のインストールが見えるのはこれのおかげで、
+GitHub がカウントするのはアセットだけであり、タグから自動生成されるソースアーカイブは
+アセットではない。ただしこれは**ダウンロード数であってインストール数ではない**。
+Homebrew はダウンロードをキャッシュするので再インストールは計上されず、逆に CI や
+ミラーは計上される。`--HEAD` インストールは git clone なので永久に数えられない。
+大まかな規模感として読むこと。
+
 ---
 
 ## アップデート
 
 ### tap から
 
-`brew upgrade` だけでは**絶対に更新されない**。このフォーミュラは head-only で、
+```sh
+brew update                            # 最新のフォーミュラを取得
+brew upgrade taross-f/hawdl/hawdl
+```
+
+例外は `--HEAD` で入れた場合で、こちらは `brew upgrade` だけでは**絶対に更新されない**。
 Homebrew は HEAD インストールに対して明示的に指示しない限り上流を確認せず、
 いつまでも「最新」と報告し続ける:
 
 ```sh
-brew update                                     # 最新のフォーミュラを取得
 brew upgrade --fetch-HEAD taross-f/hawdl/hawdl  # --fetch-HEAD は省略不可
 ```
 

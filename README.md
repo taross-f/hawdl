@@ -1,5 +1,8 @@
 # hawdl
 
+[![Downloads](https://img.shields.io/github/downloads/taross-f/hawdl/total?label=downloads)](https://github.com/taross-f/hawdl/releases)
+[![Latest release](https://img.shields.io/github/v/release/taross-f/hawdl?label=release)](https://github.com/taross-f/hawdl/releases/latest)
+
 Keep macOS's `awdl0` interface down, and keep it that way.
 
 *[日本語版 README](README.ja.md)*
@@ -85,14 +88,23 @@ tarball's `INSTALL.md` covers the rest, including the LaunchDaemon plist.
 ### From a personal tap
 
 ```sh
-brew tap taross-f/hawdl
-brew install --HEAD taross-f/hawdl/hawdl
+brew install taross-f/hawdl/hawdl
 ```
 
-> The formula is head-only for now, so `--HEAD` is required; it becomes
-> unnecessary once there is a tagged release. It lives in
+This builds the latest release from source. `brew tap taross-f/hawdl` first is
+not needed: installing by the fully qualified name taps it for you.
+
+> The formula lives in
 > [taross-f/homebrew-hawdl](https://github.com/taross-f/homebrew-hawdl), not in
-> this repository, so there is only one copy to keep current.
+> this repository, so there is only one copy to keep current. The Release
+> workflow rewrites it on every tag rather than leaving it to be updated by
+> hand.
+
+To track `main` instead of the latest release:
+
+```sh
+brew install --HEAD taross-f/hawdl/hawdl
+```
 
 **Starting the daemon is mandatory.** Without it, neither `hawdl` nor HawdlBar
 has anything to talk to:
@@ -162,18 +174,32 @@ that signature, and macOS then refuses to launch it — with no error and no men
 bar item, which looks exactly like the app doing nothing. `codesign --verify
 --deep --strict HawdlBar.app` tells you whether a bundle is in that state.
 
+### What the downloads badge counts
+
+It is the total across every release asset: the universal tarball above, and
+the source tarball `brew install` fetches. That makes a tap install visible at
+all — GitHub counts asset downloads only, and the source archive it generates
+for a tag is not an asset — but it is a download count, not an install count.
+Homebrew caches downloads, so a reinstall never shows up, while CI runs and
+mirrors do. A `--HEAD` install is a git clone and is never counted. Read it as
+a rough scale and nothing finer.
+
 ---
 
 ## Updating
 
 ### From the tap
 
-`brew upgrade` on its own will **never** update this. The formula is head-only,
-and Homebrew does not check upstream for a HEAD install unless asked to — it
-reports the package as up to date indefinitely:
+```sh
+brew update                            # pull the latest formula
+brew upgrade taross-f/hawdl/hawdl
+```
+
+A `--HEAD` install is the exception: `brew upgrade` on its own will **never**
+update one. Homebrew does not check upstream for a HEAD install unless asked
+to, and reports the package as up to date indefinitely:
 
 ```sh
-brew update                                     # pull the latest formula
 brew upgrade --fetch-HEAD taross-f/hawdl/hawdl  # --fetch-HEAD is not optional
 ```
 
