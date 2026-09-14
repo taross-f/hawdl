@@ -455,6 +455,17 @@ sudo .build/debug/hawdld --verbose
 # → AirDrop を開くと flapCount が増え、awdl0 がすぐ down に戻る
 ```
 
+### リリース手順
+
+Actions → Release → **Run workflow** を `main` に対して実行する。バージョンは
+`Sources/HawdlCore/Version.swift` の `hawdlVersion` から読むので、先にそれと
+`Info.plist` を上げておくこと。実行するとビルド対象のコミットに `v<version>`
+のタグが打たれ、そのタグが既にあれば冒頭で止まる。`v*` タグを手で push しても
+同じ結果になる。ボタンがあるのは、ローカルに clone せずリリースを切れるようにするため。
+
+`main` 以外のブランチで実行した場合は publish せずビルドとパッケージング検証だけを行う。
+マージ前に経路を試すときはこれを使う。
+
 ### 構成
 
 | ターゲット | 中身 |

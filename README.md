@@ -471,6 +471,18 @@ sudo .build/debug/hawdld --verbose
 # → open AirDrop: flapCount climbs and awdl0 goes straight back down
 ```
 
+### Releasing
+
+Actions -> Release -> **Run workflow**, on `main`. The version is read from
+`hawdlVersion` in `Sources/HawdlCore/Version.swift`, so bump that and
+`Info.plist` to match before running; the run tags `v<version>` on the commit
+it builds and refuses up front if that tag already exists. Pushing a `v*` tag
+by hand does the same thing — the button is there so that cutting a release
+needs no local checkout.
+
+Running it from any other branch builds and verifies the packaging without
+publishing anything, which is how to exercise the path before merging.
+
 ### Layout
 
 | Target | Contents |
